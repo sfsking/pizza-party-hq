@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, ShoppingCart, Settings, Plus } from "lucide-react";
+import { LogOut, ShoppingCart, Settings, Plus, ClipboardList, TrendingUp, Clock, Package } from "lucide-react";
 
 interface Product {
   id: string;
@@ -18,6 +18,12 @@ interface Product {
 
 export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    todayRevenue: 0,
+    activeProducts: 0
+  });
   const [loading, setLoading] = useState(true);
   const { user, profile, signOut } = useAuth();
   const { toast } = useToast();
@@ -29,6 +35,7 @@ export default function Dashboard() {
       return;
     }
     fetchProducts();
+    fetchStats();
   }, [user, navigate]);
 
   const fetchProducts = async () => {
@@ -49,6 +56,46 @@ export default function Dashboard() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      // Get total orders
+      const { count: totalOrders } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact' });
+
+      // Get pending orders
+      const { count: pendingOrders } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact' })
+        .eq('status', 'pending');
+
+      // Get today's revenue
+      const today = new Date().toISOString().split('T')[0];
+      const { data: todayOrders } = await supabase
+        .from('orders')
+        .select('total_amount')
+        .gte('created_at', `${today}T00:00:00`)
+        .lt('created_at', `${today}T23:59:59`);
+
+      const todayRevenue = todayOrders?.reduce((sum, order) => sum + Number(order.total_amount), 0) || 0;
+
+      // Get active products count
+      const { count: activeProducts } = await supabase
+        .from('products')
+        .select('*', { count: 'exact' })
+        .eq('is_active', true);
+
+      setStats({
+        totalOrders: totalOrders || 0,
+        pendingOrders: pendingOrders || 0,
+        todayRevenue,
+        activeProducts: activeProducts || 0
+      });
+    } catch (error: any) {
+      console.error('Failed to fetch stats:', error);
     }
   };
 
@@ -103,6 +150,65 @@ export default function Dashboard() {
           </div>
         </header>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* Stats Cards */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <ClipboardList className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Orders</p>
+                  <p className="text-2xl font-bold">{stats.totalOrders}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-orange-500/10 rounded-lg">
+                  <Clock className="h-6 w-6 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Pending Orders</p>
+                  <p className="text-2xl font-bold">{stats.pendingOrders}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-green-500/10 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Today's Revenue</p>
+                  <p className="text-2xl font-bold">${stats.todayRevenue.toFixed(2)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Package className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Active Products</p>
+                  <p className="text-2xl font-bold">{stats.activeProducts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-3">
             <CardHeader>
@@ -125,6 +231,7 @@ export default function Dashboard() {
                 onClick={() => navigate("/orders")}
                 className="flex items-center gap-2 h-20"
               >
+                <ClipboardList className="h-6 w-6" />
                 <div className="text-left">
                   <div className="font-semibold">View Orders</div>
                   <div className="text-sm opacity-80">See all orders</div>

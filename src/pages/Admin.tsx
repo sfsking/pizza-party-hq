@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -212,16 +213,41 @@ export default function Admin() {
     }
 
     try {
-      // Note: In a real implementation, you'd need to handle user creation through admin API
-      // For now, this is a placeholder for the admin interface
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No authentication session');
+      }
+
+      const response = await fetch(`https://ntzcpsdackxlvqmkifyp.supabase.co/functions/v1/create-employee`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: newEmployee.email,
+          password: newEmployee.password,
+          fullName: newEmployee.fullName,
+          role: newEmployee.role
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create employee');
+      }
+
+      setNewEmployee({ email: "", password: "", fullName: "", role: "employee" });
+      fetchEmployees();
       toast({
-        title: "Info",
-        description: "Employee management requires backend admin functions. Please use Supabase admin panel for now.",
+        title: "Success",
+        description: "Employee created successfully",
       });
     } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add employee",
+        description: error.message || "Failed to add employee",
         variant: "destructive",
       });
     }
@@ -403,6 +429,21 @@ export default function Admin() {
                     onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })}
                     placeholder="Enter password"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="employee-role">Role</Label>
+                  <Select
+                    value={newEmployee.role}
+                    onValueChange={(value: "employee" | "admin") => setNewEmployee({ ...newEmployee, role: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employee">Employee</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button onClick={handleAddEmployee}>
                   <Plus className="h-4 w-4 mr-2" />
