@@ -8,10 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/useAuth";
+import { useFileManager } from "@/hooks/useFileManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Plus, Edit, Trash2, Users, Package } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, Users, Package, Download, Upload, BarChart3, FileText } from "lucide-react";
 
 interface Product {
   id: string;
@@ -28,14 +30,25 @@ interface Employee {
   email: string;
   full_name: string | null;
   role: 'employee' | 'admin';
+  is_active: boolean;
   created_at: string;
 }
 
+interface SalesReport {
+  id: string;
+  report_date: string;
+  total_orders: number;
+  total_revenue: number;
+  file_path: string | null;
+  created_at: string;
+}
 export default function Admin() {
   const [products, setProducts] = useState<Product[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [employeeToRemove, setEmployeeToRemove] = useState<Employee | null>(null);
   const [newProduct, setNewProduct] = useState({
     name: "",
     price: "",
@@ -51,6 +64,7 @@ export default function Admin() {
 
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const { generateSalesReport, exportProductListing, uploading } = useFileManager();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -69,6 +83,7 @@ export default function Admin() {
     }
     fetchProducts();
     fetchEmployees();
+    fetchSalesReports();
   }, [user, profile, navigate]);
 
   const fetchProducts = async () => {
@@ -109,6 +124,20 @@ export default function Admin() {
     }
   };
 
+  const fetchSalesReports = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sales_reports')
+        .select('*')
+        .order('report_date', { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      setSalesReports(data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch sales reports:', error);
+    }
+  };
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.price) {
       toast({
@@ -253,6 +282,54 @@ export default function Admin() {
     }
   };
 
+  const handleRemoveEmployee = async (employee: Employee) => {
+    try {
+      // Soft delete - deactivate the employee
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_active: false })
+        .eq('id', employee.id);
+
+      if (error) throw error;
+
+      fetchEmployees();
+      setEmployeeToRemove(null);
+      toast({
+        title: "Success",
+        description: "Employee removed successfully",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to remove employee",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGenerateSalesReport = async () => {
+    const today = new Date();
+    const result = await generateSalesReport(today);
+    
+    if (result) {
+      fetchSalesReports();
+      toast({
+        title: "Success",
+        description: "Sales report generated successfully",
+      });
+    }
+  };
+
+  const handleExportProducts = async () => {
+    const result = await exportProductListing(products);
+    
+    if (result) {
+      toast({
+        title: "Success",
+        description: "Product listing exported successfully",
+      });
+    }
+  };
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -275,7 +352,7 @@ export default function Admin() {
         </header>
 
         <Tabs defaultValue="products" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="products" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
               Products
@@ -283,6 +360,14 @@ export default function Admin() {
             <TabsTrigger value="employees" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Employees
+            </TabsTrigger>
+            <TabsTrigger value="sales" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Sales
+            </TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Files
             </TabsTrigger>
           </TabsList>
 
@@ -344,7 +429,13 @@ export default function Admin() {
             {/* Existing Products */}
             <Card>
               <CardHeader>
-                <CardTitle>Existing Products</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  Existing Products
+                  <Button onClick={handleExportProducts} disabled={uploading} variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Products
+                  </Button>
+                </CardTitle>
                 <CardDescription>Manage your menu items</CardDescription>
               </CardHeader>
               <CardContent>
@@ -460,7 +551,7 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {employees.map((employee) => (
+                  {employees.filter(emp => emp.is_active !== false).map((employee) => (
                     <div key={employee.id} className="flex items-center gap-4 p-4 border rounded">
                       <div className="flex-1">
                         <h3 className="font-semibold">{employee.full_name || employee.email}</h3>
@@ -469,9 +560,35 @@ export default function Admin() {
                           Joined: {new Date(employee.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <Badge variant={employee.role === 'admin' ? "default" : "secondary"}>
-                        {employee.role}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={employee.role === 'admin' ? "default" : "secondary"}>
+                          {employee.role}
+                        </Badge>
+                        {employee.email !== 'sifee1200@gmail.com' && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" variant="outline">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remove Employee</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to remove {employee.full_name || employee.email}? 
+                                  This action will deactivate their account.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleRemoveEmployee(employee)}>
+                                  Remove Employee
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -479,6 +596,93 @@ export default function Admin() {
             </Card>
           </TabsContent>
         </Tabs>
+          <TabsContent value="sales" className="space-y-6">
+            {/* Sales Analytics */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  Sales Reports
+                  <Button onClick={handleGenerateSalesReport} disabled={uploading}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Generate Today's Report
+                  </Button>
+                </CardTitle>
+                <CardDescription>View and generate sales reports</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {salesReports.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">
+                      No sales reports generated yet
+                    </p>
+                  ) : (
+                    salesReports.map((report) => (
+                      <div key={report.id} className="flex items-center justify-between p-4 border rounded">
+                        <div>
+                          <h3 className="font-semibold">
+                            Report for {new Date(report.report_date).toLocaleDateString()}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {report.total_orders} orders • ${report.total_revenue.toFixed(2)} revenue
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Generated: {new Date(report.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Badge variant="outline">
+                            {report.total_orders} Orders
+                          </Badge>
+                          <Badge variant="default">
+                            ${report.total_revenue.toFixed(2)}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="files" className="space-y-6">
+            {/* File Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle>File Management</CardTitle>
+                <CardDescription>Manage sales reports and product listings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Sales Data</CardTitle>
+                      <CardDescription>Export and manage sales reports</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button onClick={handleGenerateSalesReport} disabled={uploading} className="w-full">
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Sales Report
+                      </Button>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Product Listings</CardTitle>
+                      <CardDescription>Export and manage product data</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button onClick={handleExportProducts} disabled={uploading} className="w-full">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Export Product Listing
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
         {/* Edit Product Modal */}
         {editingProduct && (
