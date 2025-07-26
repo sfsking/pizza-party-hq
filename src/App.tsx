@@ -12,6 +12,7 @@ import OrderSummary from "./pages/OrderSummary";
 import Orders from "./pages/Orders";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import "./setup-admin"; // Auto-setup admin account
 
 const queryClient = new QueryClient();
 

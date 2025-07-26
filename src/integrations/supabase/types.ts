@@ -109,6 +109,30 @@ export type Database = {
           },
         ]
       }
+      product_listings: {
+        Row: {
+          created_at: string
+          file_path: string
+          id: string
+          listing_data: Json | null
+          listing_name: string
+        }
+        Insert: {
+          created_at?: string
+          file_path: string
+          id?: string
+          listing_data?: Json | null
+          listing_name: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string
+          id?: string
+          listing_data?: Json | null
+          listing_name?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           created_at: string
@@ -148,6 +172,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          is_active: boolean | null
           role: string | null
           updated_at: string
           user_id: string
@@ -157,6 +182,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id?: string
+          is_active?: boolean | null
           role?: string | null
           updated_at?: string
           user_id: string
@@ -166,9 +192,40 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          is_active?: boolean | null
           role?: string | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      sales_reports: {
+        Row: {
+          created_at: string
+          file_path: string | null
+          id: string
+          report_data: Json | null
+          report_date: string
+          total_orders: number
+          total_revenue: number
+        }
+        Insert: {
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          report_data?: Json | null
+          report_date: string
+          total_orders?: number
+          total_revenue?: number
+        }
+        Update: {
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          report_data?: Json | null
+          report_date?: string
+          total_orders?: number
+          total_revenue?: number
         }
         Relationships: []
       }
@@ -177,7 +234,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

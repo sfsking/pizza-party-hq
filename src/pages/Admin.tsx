@@ -112,7 +112,10 @@ export default function Admin() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setEmployees((data || []) as Employee[]);
+      setEmployees((data || []).map(emp => ({
+        ...emp,
+        is_active: emp.is_active ?? true
+      })) as Employee[]);
     } catch (error: any) {
       toast({
         title: "Error",
