@@ -11,8 +11,9 @@ import CreateOrder from "./pages/CreateOrder";
 import OrderSummary from "./pages/OrderSummary";
 import Orders from "./pages/Orders";
 import Admin from "./pages/Admin";
+import SetupAdmin from "./pages/SetupAdmin";
 import NotFound from "./pages/NotFound";
-import "./setup-admin"; // Auto-setup admin account
+// Admin setup available at /admin/setup if needed
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/order-summary/:orderId" element={<OrderSummary />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/setup" element={<SetupAdmin />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

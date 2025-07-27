@@ -8,6 +8,7 @@ interface Profile {
   email: string;
   full_name: string | null;
   role: 'employee' | 'admin';
+  is_active: boolean;
 }
 
 interface AuthContextType {
@@ -38,12 +39,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           // Fetch user profile
           setTimeout(async () => {
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .single();
-            setProfile(profileData as Profile);
+            try {
+              const { data: profileData, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .eq('is_active', true)
+                .maybeSingle();
+              
+              if (error) {
+                console.error('Profile fetch error:', error);
+                setProfile(null);
+              } else {
+                setProfile(profileData as Profile);
+              }
+            } catch (error) {
+              console.error('Profile fetch failed:', error);
+              setProfile(null);
+            }
           }, 0);
         } else {
           setProfile(null);

@@ -72,7 +72,9 @@ export default function Admin() {
       navigate("/auth");
       return;
     }
-    if (profile?.role !== 'admin') {
+    
+    // Only redirect if profile is loaded and user is not admin
+    if (profile && profile.role !== 'admin') {
       toast({
         title: "Access Denied",
         description: "You need admin privileges to access this page",
@@ -81,9 +83,13 @@ export default function Admin() {
       navigate("/");
       return;
     }
-    fetchProducts();
-    fetchEmployees();
-    fetchSalesReports();
+    
+    // Only fetch data if user has admin role
+    if (profile?.role === 'admin') {
+      fetchProducts();
+      fetchEmployees();
+      fetchSalesReports();
+    }
   }, [user, profile, navigate]);
 
   const fetchProducts = async () => {
@@ -109,6 +115,7 @@ export default function Admin() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
+        .eq('is_active', true)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -117,11 +124,13 @@ export default function Admin() {
         is_active: emp.is_active ?? true
       })) as Employee[]);
     } catch (error: any) {
+      console.error('Employee fetch error:', error);
       toast({
         title: "Error",
         description: "Failed to load employees",
         variant: "destructive",
       });
+      setEmployees([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -333,10 +342,24 @@ export default function Admin() {
       });
     }
   };
-  if (loading) {
+  if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">Loading admin panel...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <div>Loading admin panel...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile.role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">Access Denied</div>
+          <div>You need admin privileges to access this page.</div>
+        </div>
       </div>
     );
   }
@@ -597,8 +620,8 @@ export default function Admin() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+           </TabsContent>
+
           <TabsContent value="sales" className="space-y-6">
             {/* Sales Analytics */}
             <Card>
@@ -685,7 +708,8 @@ export default function Admin() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
+           </TabsContent>
+        </Tabs>
 
         {/* Edit Product Modal */}
         {editingProduct && (
