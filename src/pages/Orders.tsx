@@ -24,7 +24,7 @@ interface Order {
   profiles: {
     full_name: string | null;
     email: string;
-  };
+  } | null;
   order_items: {
     id: string;
     quantity: number;
@@ -268,7 +268,7 @@ export default function Orders() {
                             </CardTitle>
                             <CardDescription>
                               {new Date(order.created_at).toLocaleTimeString()} • 
-                              Employee: {order.profiles.full_name || order.profiles.email}
+                              Employee: {order.profiles?.full_name || order.profiles?.email || 'Unknown'}
                             </CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
