@@ -61,6 +61,8 @@ export default function Admin() {
     fullName: "",
     role: "employee" as "employee" | "admin"
   });
+  const [autoReportTime, setAutoReportTime] = useState<string>('00:00');
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -89,6 +91,7 @@ export default function Admin() {
       fetchProducts();
       fetchEmployees();
       fetchSalesReports();
+      fetchAutoReportSettings();
     }
   }, [user, profile, navigate]);
 
@@ -148,6 +151,59 @@ export default function Admin() {
       setSalesReports(data || []);
     } catch (error: any) {
       console.error('Failed to fetch sales reports:', error);
+    }
+  };
+
+  const fetchAutoReportSettings = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('auto_report_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // Ignore "no rows" error
+      if (data) {
+        setAutoReportTime(data.report_time.substring(0, 5)); // Format HH:MM
+      }
+    } catch (error) {
+      console.error('Error fetching auto report settings:', error);
+    }
+  };
+
+  const saveAutoReportSettings = async () => {
+    if (!user) return;
+    
+    setSavingSettings(true);
+    try {
+      const { error } = await supabase
+        .from('auto_report_settings')
+        .upsert({
+          user_id: user.id,
+          report_time: autoReportTime + ':00', // Add seconds
+          is_active: true
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (error) throw error;
+      
+      toast({
+        title: "Settings Saved",
+        description: `Auto-report time set to ${autoReportTime}`,
+      });
+    } catch (error) {
+      console.error('Error saving auto report settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSettings(false);
     }
   };
   const handleAddProduct = async () => {
@@ -623,6 +679,38 @@ export default function Admin() {
            </TabsContent>
 
           <TabsContent value="sales" className="space-y-6">
+            {/* Auto Report Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Auto Report Settings</CardTitle>
+                <CardDescription>Configure automatic daily report generation</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Label htmlFor="report-time">Daily Report Time</Label>
+                    <Input
+                      id="report-time"
+                      type="time"
+                      value={autoReportTime}
+                      onChange={(e) => setAutoReportTime(e.target.value)}
+                      className="w-40"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Reports will be generated automatically at this time daily
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={saveAutoReportSettings} 
+                    disabled={savingSettings}
+                    className="mt-6"
+                  >
+                    {savingSettings ? 'Saving...' : 'Save Settings'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Sales Analytics */}
             <Card>
               <CardHeader>
