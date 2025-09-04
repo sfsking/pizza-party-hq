@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFileManager } from "@/hooks/useFileManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { ArrowLeft, Plus, Edit, Trash2, Users, Package, Download, Upload, BarChart3, FileText } from "lucide-react";
 
 interface Product {
@@ -42,13 +43,24 @@ interface SalesReport {
   file_path: string | null;
   created_at: string;
 }
+
+interface ProductListing {
+  id: string;
+  listing_name: string;
+  file_path: string;
+  created_at: string;
+}
+
 export default function Admin() {
   const [products, setProducts] = useState<Product[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
+  const [productListings, setProductListings] = useState<ProductListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [employeeToRemove, setEmployeeToRemove] = useState<Employee | null>(null);
+  const [autoReportTime, setAutoReportTime] = useState("00:00");
+  const [savingSettings, setSavingSettings] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: "",
     price: "",
@@ -61,12 +73,9 @@ export default function Admin() {
     fullName: "",
     role: "employee" as "employee" | "admin"
   });
-  const [autoReportTime, setAutoReportTime] = useState<string>('00:00');
-  const [savingSettings, setSavingSettings] = useState(false);
 
   const { user, profile } = useAuth();
-  const { toast } = useToast();
-  const { generateSalesReport, exportProductListing, uploading } = useFileManager();
+  const fileManager = useFileManager();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -77,23 +86,27 @@ export default function Admin() {
     
     // Only redirect if profile is loaded and user is not admin
     if (profile && profile.role !== 'admin') {
-      toast({
-        title: "Access Denied",
-        description: "You need admin privileges to access this page",
-        variant: "destructive",
-      });
+      toast.error("You need admin privileges to access this page");
       navigate("/");
       return;
     }
     
     // Only fetch data if user has admin role
     if (profile?.role === 'admin') {
-      fetchProducts();
-      fetchEmployees();
-      fetchSalesReports();
-      fetchAutoReportSettings();
+      fetchData();
     }
   }, [user, profile, navigate]);
+
+  const fetchData = async () => {
+    await Promise.all([
+      fetchProducts(),
+      fetchEmployees(),
+      fetchSalesReports(),
+      fetchProductListings(),
+      fetchAutoReportSettings()
+    ]);
+    setLoading(false);
+  };
 
   const fetchProducts = async () => {
     try {
@@ -105,11 +118,7 @@ export default function Admin() {
       if (error) throw error;
       setProducts(data || []);
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to load products",
-        variant: "destructive",
-      });
+      toast.error("Failed to load products");
     }
   };
 
@@ -128,14 +137,8 @@ export default function Admin() {
       })) as Employee[]);
     } catch (error: any) {
       console.error('Employee fetch error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load employees",
-        variant: "destructive",
-      });
-      setEmployees([]); // Set empty array on error
-    } finally {
-      setLoading(false);
+      toast.error("Failed to load employees");
+      setEmployees([]);
     }
   };
 
@@ -144,13 +147,28 @@ export default function Admin() {
       const { data, error } = await supabase
         .from('sales_reports')
         .select('*')
-        .order('report_date', { ascending: false })
-        .limit(10);
-      
+        .order('report_date', { ascending: false });
+
       if (error) throw error;
       setSalesReports(data || []);
-    } catch (error: any) {
-      console.error('Failed to fetch sales reports:', error);
+    } catch (error) {
+      console.error('Error fetching sales reports:', error);
+      toast.error('Failed to fetch sales reports');
+    }
+  };
+
+  const fetchProductListings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_listings')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProductListings(data || []);
+    } catch (error) {
+      console.error('Error fetching product listings:', error);
+      toast.error('Failed to fetch product listings');
     }
   };
 
@@ -165,9 +183,9 @@ export default function Admin() {
         .eq('is_active', true)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error; // Ignore "no rows" error
+      if (error && error.code !== 'PGRST116') throw error;
       if (data) {
-        setAutoReportTime(data.report_time.substring(0, 5)); // Format HH:MM
+        setAutoReportTime(data.report_time.substring(0, 5));
       }
     } catch (error) {
       console.error('Error fetching auto report settings:', error);
@@ -183,7 +201,7 @@ export default function Admin() {
         .from('auto_report_settings')
         .upsert({
           user_id: user.id,
-          report_time: autoReportTime + ':00', // Add seconds
+          report_time: autoReportTime + ':00',
           is_active: true
         }, {
           onConflict: 'user_id'
@@ -191,28 +209,18 @@ export default function Admin() {
 
       if (error) throw error;
       
-      toast({
-        title: "Settings Saved",
-        description: `Auto-report time set to ${autoReportTime}`,
-      });
+      toast.success(`Auto-report time set to ${autoReportTime}`);
     } catch (error) {
       console.error('Error saving auto report settings:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save settings",
-        variant: "destructive",
-      });
+      toast.error("Failed to save settings");
     } finally {
       setSavingSettings(false);
     }
   };
+
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.price) {
-      toast({
-        title: "Error",
-        description: "Name and price are required",
-        variant: "destructive",
-      });
+      toast.error("Name and price are required");
       return;
     }
 
@@ -231,16 +239,9 @@ export default function Admin() {
 
       setNewProduct({ name: "", price: "", image_url: "", description: "" });
       fetchProducts();
-      toast({
-        title: "Success",
-        description: "Product added successfully",
-      });
+      toast.success("Product added successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to add product",
-        variant: "destructive",
-      });
+      toast.error("Failed to add product");
     }
   };
 
@@ -263,16 +264,9 @@ export default function Admin() {
 
       setEditingProduct(null);
       fetchProducts();
-      toast({
-        title: "Success",
-        description: "Product updated successfully",
-      });
+      toast.success("Product updated successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to update product",
-        variant: "destructive",
-      });
+      toast.error("Failed to update product");
     }
   };
 
@@ -286,26 +280,15 @@ export default function Admin() {
       if (error) throw error;
 
       fetchProducts();
-      toast({
-        title: "Success",
-        description: "Product deactivated successfully",
-      });
+      toast.success("Product deactivated successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to deactivate product",
-        variant: "destructive",
-      });
+      toast.error("Failed to deactivate product");
     }
   };
 
   const handleAddEmployee = async () => {
     if (!newEmployee.email || !newEmployee.password || !newEmployee.fullName) {
-      toast({
-        title: "Error",
-        description: "All fields are required",
-        variant: "destructive",
-      });
+      toast.error("All fields are required");
       return;
     }
 
@@ -337,22 +320,14 @@ export default function Admin() {
 
       setNewEmployee({ email: "", password: "", fullName: "", role: "employee" });
       fetchEmployees();
-      toast({
-        title: "Success",
-        description: "Employee created successfully",
-      });
+      toast.success("Employee created successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add employee",
-        variant: "destructive",
-      });
+      toast.error(error.message || "Failed to add employee");
     }
   };
 
   const handleRemoveEmployee = async (employee: Employee) => {
     try {
-      // Soft delete - deactivate the employee
       const { error } = await supabase
         .from('profiles')
         .update({ is_active: false })
@@ -361,43 +336,44 @@ export default function Admin() {
       if (error) throw error;
 
       fetchEmployees();
-      setEmployeeToRemove(null);
-      toast({
-        title: "Success",
-        description: "Employee removed successfully",
-      });
+      toast.success("Employee removed successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to remove employee",
-        variant: "destructive",
-      });
+      toast.error("Failed to remove employee");
     }
   };
 
   const handleGenerateSalesReport = async () => {
-    const today = new Date();
-    const result = await generateSalesReport(today);
-    
-    if (result) {
-      fetchSalesReports();
-      toast({
-        title: "Success",
-        description: "Sales report generated successfully",
-      });
+    try {
+      setUploading(true);
+      const report = await fileManager.generateSalesReport(new Date());
+      if (report) {
+        toast.success("Sales report generated successfully!");
+        await fetchSalesReports();
+      }
+    } catch (error) {
+      console.error('Error generating sales report:', error);
+      toast.error('Failed to generate sales report');
+    } finally {
+      setUploading(false);
     }
   };
 
   const handleExportProducts = async () => {
-    const result = await exportProductListing(products);
-    
-    if (result) {
-      toast({
-        title: "Success",
-        description: "Product listing exported successfully",
-      });
+    try {
+      setUploading(true);
+      const report = await fileManager.exportProductListing(products);
+      if (report) {
+        toast.success("Product listing exported successfully!");
+        await fetchProductListings();
+      }
+    } catch (error) {
+      console.error('Error exporting products:', error);
+      toast.error('Failed to export product listing');
+    } finally {
+      setUploading(false);
     }
   };
+
   if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -766,31 +742,126 @@ export default function Admin() {
                 <CardTitle>File Management</CardTitle>
                 <CardDescription>Manage sales reports and product listings</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg">Sales Data</CardTitle>
-                      <CardDescription>Export and manage sales reports</CardDescription>
+                      <CardDescription>Browse and download sales reports by date</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                       <Button onClick={handleGenerateSalesReport} disabled={uploading} className="w-full">
-                        <Download className="h-4 w-4 mr-2" />
-                        Generate Sales Report
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Generate Today's Report
                       </Button>
+                      
+                      <div className="border-t pt-4">
+                        <h4 className="font-medium mb-3">Existing Sales Reports</h4>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {salesReports.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No sales reports available
+                            </p>
+                          ) : (
+                            salesReports.map((report) => (
+                              <div key={report.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">
+                                    {new Date(report.report_date).toLocaleDateString()}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {report.total_orders} orders • ${report.total_revenue.toFixed(2)}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    if (report.file_path) {
+                                      const blob = await fileManager.downloadFile('sales', report.file_path);
+                                      if (blob) {
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `sales-report-${report.report_date}.json`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        URL.revokeObjectURL(url);
+                                        toast.success("Report downloaded successfully!");
+                                      } else {
+                                        toast.error("Failed to download report");
+                                      }
+                                    }
+                                  }}
+                                  disabled={!report.file_path}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                   
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg">Product Listings</CardTitle>
-                      <CardDescription>Export and manage product data</CardDescription>
+                      <CardDescription>Browse and download product listings</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                       <Button onClick={handleExportProducts} disabled={uploading} className="w-full">
                         <Upload className="h-4 w-4 mr-2" />
-                        Export Product Listing
+                        Generate Product Listing
                       </Button>
+                      
+                      <div className="border-t pt-4">
+                        <h4 className="font-medium mb-3">Existing Product Listings</h4>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {productListings.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No product listings available
+                            </p>
+                          ) : (
+                            productListings.map((listing) => (
+                              <div key={listing.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">{listing.listing_name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Generated: {new Date(listing.created_at).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    if (listing.file_path) {
+                                      const blob = await fileManager.downloadFile('listings', listing.file_path);
+                                      if (blob) {
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `${listing.listing_name}.json`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        URL.revokeObjectURL(url);
+                                        toast.success("Listing downloaded successfully!");
+                                      } else {
+                                        toast.error("Failed to download listing");
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
