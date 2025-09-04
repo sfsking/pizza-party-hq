@@ -374,6 +374,50 @@ export default function Admin() {
     }
   };
 
+  const handleDeleteSalesReport = async (reportId: string, filePath: string | null) => {
+    try {
+      // Delete from database
+      const { error } = await supabase
+        .from('sales_reports')
+        .delete()
+        .eq('id', reportId);
+
+      if (error) throw error;
+
+      // Delete file from storage if it exists
+      if (filePath) {
+        await fileManager.deleteFile('sales', filePath);
+      }
+
+      await fetchSalesReports();
+      toast.success("Sales report deleted successfully!");
+    } catch (error) {
+      console.error('Error deleting sales report:', error);
+      toast.error('Failed to delete sales report');
+    }
+  };
+
+  const handleDeleteProductListing = async (listingId: string, filePath: string) => {
+    try {
+      // Delete from database
+      const { error } = await supabase
+        .from('product_listings')
+        .delete()
+        .eq('id', listingId);
+
+      if (error) throw error;
+
+      // Delete file from storage
+      await fileManager.deleteFile('listings', filePath);
+
+      await fetchProductListings();
+      toast.success("Product listing deleted successfully!");
+    } catch (error) {
+      console.error('Error deleting product listing:', error);
+      toast.error('Failed to delete product listing');
+    }
+  };
+
   if (loading || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -773,31 +817,55 @@ export default function Admin() {
                                     {report.total_orders} orders • ${report.total_revenue.toFixed(2)}
                                   </p>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    if (report.file_path) {
-                                      const blob = await fileManager.downloadFile('sales', report.file_path);
-                                      if (blob) {
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `sales-report-${report.report_date}.json`;
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        document.body.removeChild(a);
-                                        URL.revokeObjectURL(url);
-                                        toast.success("Report downloaded successfully!");
-                                      } else {
-                                        toast.error("Failed to download report");
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      if (report.file_path) {
+                                        const blob = await fileManager.downloadFile('sales', report.file_path);
+                                        if (blob) {
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = `sales-report-${report.report_date}.json`;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          document.body.removeChild(a);
+                                          URL.revokeObjectURL(url);
+                                          toast.success("Report downloaded successfully!");
+                                        } else {
+                                          toast.error("Failed to download report");
+                                        }
                                       }
-                                    }
-                                  }}
-                                  disabled={!report.file_path}
-                                >
-                                  <Download className="h-3 w-3" />
-                                </Button>
+                                    }}
+                                    disabled={!report.file_path}
+                                  >
+                                    <Download className="h-3 w-3" />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button size="sm" variant="outline">
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Sales Report</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete the sales report for {new Date(report.report_date).toLocaleDateString()}? 
+                                          This action cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteSalesReport(report.id, report.file_path)}>
+                                          Delete Report
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
                               </div>
                             ))
                           )}
@@ -833,30 +901,54 @@ export default function Admin() {
                                     Generated: {new Date(listing.created_at).toLocaleDateString()}
                                   </p>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    if (listing.file_path) {
-                                      const blob = await fileManager.downloadFile('listings', listing.file_path);
-                                      if (blob) {
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `${listing.listing_name}.json`;
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        document.body.removeChild(a);
-                                        URL.revokeObjectURL(url);
-                                        toast.success("Listing downloaded successfully!");
-                                      } else {
-                                        toast.error("Failed to download listing");
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      if (listing.file_path) {
+                                        const blob = await fileManager.downloadFile('listings', listing.file_path);
+                                        if (blob) {
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = `${listing.listing_name}.json`;
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          document.body.removeChild(a);
+                                          URL.revokeObjectURL(url);
+                                          toast.success("Listing downloaded successfully!");
+                                        } else {
+                                          toast.error("Failed to download listing");
+                                        }
                                       }
-                                    }
-                                  }}
-                                >
-                                  <Download className="h-3 w-3" />
-                                </Button>
+                                    }}
+                                  >
+                                    <Download className="h-3 w-3" />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button size="sm" variant="outline">
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Product Listing</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete "{listing.listing_name}"? 
+                                          This action cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDeleteProductListing(listing.id, listing.file_path)}>
+                                          Delete Listing
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
                               </div>
                             ))
                           )}
