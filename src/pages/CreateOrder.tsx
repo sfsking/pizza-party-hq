@@ -266,9 +266,11 @@ export default function CreateOrder() {
                           <p className="text-sm text-muted-foreground mb-2">{product.description}</p>
                           <div className="flex items-center justify-between">
                             <p className="font-bold text-primary">${product.price.toFixed(2)}</p>
-                            <Badge variant={product.quantity > 0 ? "secondary" : "destructive"}>
-                              {product.quantity > 0 ? `${product.quantity} available` : 'Out of stock'}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={product.quantity > 0 ? "secondary" : "destructive"} className="text-xs">
+                                {product.quantity > 0 ? `${product.quantity} available` : 'Out of stock'}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       </div>
