@@ -23,6 +23,7 @@ interface Product {
   image_url: string | null;
   description: string | null;
   is_active: boolean;
+  quantity: number;
 }
 
 interface Employee {
@@ -65,7 +66,8 @@ export default function Admin() {
     name: "",
     price: "",
     image_url: "",
-    description: ""
+    description: "",
+    quantity: ""
   });
   const [newEmployee, setNewEmployee] = useState({
     email: "",
@@ -219,8 +221,8 @@ export default function Admin() {
   };
 
   const handleAddProduct = async () => {
-    if (!newProduct.name || !newProduct.price) {
-      toast.error("Name and price are required");
+    if (!newProduct.name || !newProduct.price || !newProduct.quantity) {
+      toast.error("Name, price, and quantity are required");
       return;
     }
 
@@ -232,12 +234,13 @@ export default function Admin() {
           price: parseFloat(newProduct.price),
           image_url: newProduct.image_url || null,
           description: newProduct.description || null,
+          quantity: parseInt(newProduct.quantity),
           is_active: true
         });
 
       if (error) throw error;
 
-      setNewProduct({ name: "", price: "", image_url: "", description: "" });
+      setNewProduct({ name: "", price: "", image_url: "", description: "", quantity: "" });
       fetchProducts();
       toast.success("Product added successfully");
     } catch (error: any) {
@@ -256,6 +259,7 @@ export default function Admin() {
           price: editingProduct.price,
           image_url: editingProduct.image_url,
           description: editingProduct.description,
+          quantity: editingProduct.quantity,
           is_active: editingProduct.is_active
         })
         .eq('id', editingProduct.id);
@@ -481,7 +485,7 @@ export default function Admin() {
                 <CardDescription>Add a new item to the menu</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="product-name">Product Name</Label>
                     <Input
@@ -500,6 +504,17 @@ export default function Admin() {
                       value={newProduct.price}
                       onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
                       placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="product-quantity">Quantity</Label>
+                    <Input
+                      id="product-quantity"
+                      type="number"
+                      min="0"
+                      value={newProduct.quantity}
+                      onChange={(e) => setNewProduct({ ...newProduct, quantity: e.target.value })}
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -554,7 +569,12 @@ export default function Admin() {
                       <div className="flex-1">
                         <h3 className="font-semibold">{product.name}</h3>
                         <p className="text-sm text-muted-foreground">{product.description}</p>
-                        <p className="font-bold">${product.price.toFixed(2)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold">${product.price.toFixed(2)}</p>
+                          <Badge variant={product.quantity > 0 ? "default" : "destructive"}>
+                            {product.quantity > 0 ? `${product.quantity} in stock` : 'Out of stock'}
+                          </Badge>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={product.is_active ? "default" : "secondary"}>
@@ -984,6 +1004,15 @@ export default function Admin() {
                     step="0.01"
                     value={editingProduct.price}
                     onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={editingProduct.quantity}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, quantity: parseInt(e.target.value) })}
                   />
                 </div>
                 <div>

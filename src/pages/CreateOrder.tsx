@@ -18,6 +18,7 @@ interface Product {
   price: number;
   image_url: string | null;
   description: string | null;
+  quantity: number;
 }
 
 interface OrderItem {
@@ -71,7 +72,27 @@ export default function CreateOrder() {
   };
 
   const addToOrder = (product: Product) => {
+    if (product.quantity === 0) {
+      toast({
+        title: "Out of Stock",
+        description: "This item is currently out of stock",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const existingItem = orderItems.find(item => item.product.id === product.id);
+    const currentQuantityInOrder = existingItem ? existingItem.quantity : 0;
+    
+    if (currentQuantityInOrder >= product.quantity) {
+      toast({
+        title: "Maximum Quantity Reached",
+        description: `Only ${product.quantity} units available`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (existingItem) {
       setOrderItems(orderItems.map(item =>
         item.product.id === product.id
@@ -88,6 +109,16 @@ export default function CreateOrder() {
     if (newQuantity === 0) {
       setOrderItems(orderItems.filter(item => item.product.id !== productId));
     } else {
+      const product = products.find(p => p.id === productId);
+      if (product && newQuantity > product.quantity) {
+        toast({
+          title: "Maximum Quantity Reached",
+          description: `Only ${product.quantity} units available`,
+          variant: "destructive",
+        });
+        return;
+      }
+      
       setOrderItems(orderItems.map(item =>
         item.product.id === productId
           ? { ...item, quantity: newQuantity }
@@ -219,7 +250,7 @@ export default function CreateOrder() {
                       key={product.id}
                       className={`border rounded-lg p-4 cursor-pointer transition-all hover:shadow-md ${
                         selectedProduct?.id === product.id ? 'ring-2 ring-primary' : ''
-                      }`}
+                      } ${product.quantity === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                       onClick={() => addToOrder(product)}
                     >
                       <div className="flex gap-4">
@@ -233,7 +264,12 @@ export default function CreateOrder() {
                         <div className="flex-1">
                           <h3 className="font-semibold">{product.name}</h3>
                           <p className="text-sm text-muted-foreground mb-2">{product.description}</p>
-                          <p className="font-bold text-primary">${product.price.toFixed(2)}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-primary">${product.price.toFixed(2)}</p>
+                            <Badge variant={product.quantity > 0 ? "secondary" : "destructive"}>
+                              {product.quantity > 0 ? `${product.quantity} available` : 'Out of stock'}
+                            </Badge>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -346,6 +382,7 @@ export default function CreateOrder() {
                               size="sm"
                               variant="outline"
                               onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                              disabled={item.quantity >= item.product.quantity}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
